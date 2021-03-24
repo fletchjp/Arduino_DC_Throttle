@@ -51,7 +51,7 @@ typedef unsigned char byte;
 #define direction_bit 3
 #define t_Bit  2
 #define RUN_ADC 0b11000111
-#define THROTTLE_THROTTLE_NULL 255
+#define THROTTLE_NULL 255
 
 byte lcount;
 byte num_in;
@@ -110,7 +110,7 @@ void setup()
   ADMUX = 0x40 + adc_high_res;  // use adc0, and AVref is reference (Vcc is full scale) was 0x40
   DIDR0 = 0x03;             // turn off the digital input for adc0 and adc1
   inp = 0;
-  num_in = THROTTLE_THROTTLE_NULL;
+  num_in = THROTTLE_NULL;
   direction_relay = 0;
   pause = 0;
   use_pot = 1;
