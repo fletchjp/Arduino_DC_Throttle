@@ -51,7 +51,7 @@ typedef unsigned char byte;
 #define direction_bit 3
 #define t_Bit  2
 #define RUN_ADC 0b11000111
-#define NULL 255
+#define THROTTLE_THROTTLE_NULL 255
 
 byte lcount;
 byte num_in;
@@ -110,7 +110,7 @@ void setup()
   ADMUX = 0x40 + adc_high_res;  // use adc0, and AVref is reference (Vcc is full scale) was 0x40
   DIDR0 = 0x03;             // turn off the digital input for adc0 and adc1
   inp = 0;
-  num_in = NULL;
+  num_in = THROTTLE_THROTTLE_NULL;
   direction_relay = 0;
   pause = 0;
   use_pot = 1;
@@ -228,16 +228,16 @@ void loop()
       if ((z == '=') || (z == '+') && (l_inp < 99))                     // Increase speed
       {
         l_inp++;
-        num_in = NULL - 2;
+        num_in = THROTTLE_NULL - 2;
         use_pot = 0;                               // Speed setting is from serial port, not pot
       }
       else if ((z == '-') && (l_inp > 0))          // Decrease speed
       {
         l_inp--;
-        num_in = NULL - 2;
+        num_in = THROTTLE_NULL - 2;
         use_pot = 0;
       }
-      else if (isDigit(z) && ((num_in < 10) || (num_in == NULL)))      // Only accept 2 digits
+      else if (isDigit(z) && ((num_in < 10) || (num_in == THROTTLE_NULL)))      // Only accept 2 digits
       {
         if (num_in > 100)                       // First digit causes reset of numerical accumulator
           num_in = z - '0';
@@ -249,10 +249,10 @@ void loop()
         if (num_in < 100)
         {
           l_inp = num_in;
-          num_in = NULL;
+          num_in = THROTTLE_NULL;
           use_pot = 0;                         // Speed setting is from serial port, not pot
         }
-        else if (num_in == NULL)               // Bare <cr> has been entered, give info message
+        else if (num_in == THROTTLE_NULL)               // Bare <cr> has been entered, give info message
         {
           sprintf(inpah, "Type = for speed up, - for speed down, f for forward, r for reverse\n");
           Serial.print(inpah);
@@ -261,26 +261,26 @@ void loop()
           sprintf(inpah, "Displayed data shows current speed setting, output duty cycle, present speed, error, pot reading\n\n");
           //     0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
           Serial.print(inpah);
-          num_in = NULL - 2;
+          num_in = THROTTLE_NULL - 2;
           pause = 1;
         }
-        else if (num_in == NULL - 2)
+        else if (num_in == THROTTLE_NULL - 2)
         {
           pause = 0;
-          num_in = NULL;
+          num_in = THROTTLE_NULL;
         }
       }
       else if ((z == 'f') || (z == 'r'))        // Call for F or R direction
       {
         if (((direction_relay & 0x80) && (z == 'f')) || (!(direction_relay & 0x80) && (z == 'r')))
           direction_relay = 60 + (z == 'r' ? 0x80 : 0);
-        num_in = NULL - 2;                     // Do this so \n doesn't cause informational printout
+        num_in = THROTTLE_NULL - 2;                     // Do this so \n doesn't cause informational printout
       }
 
       else if (z == 'p')
       {
         use_pot = 1;
-        num_in = NULL - 2;                    // Do this so \n doesn't cause informational printout
+        num_in = THROTTLE_NULL - 2;                    // Do this so \n doesn't cause informational printout
       }
 
       else if (z == 'a')                // Use speed feedback
