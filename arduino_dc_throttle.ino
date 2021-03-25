@@ -46,7 +46,7 @@ typedef unsigned char byte;
 #define relayPin 11 // D8 B.3
 #define dir_input 10 // D7 Pin 13 B.2
 #define tPin  9
-#define blank_bit 4
+#define framePin 4  // 60Hz frame sync
 #define led_bit 5
 #define direction_bit 3
 #define t_Bit  2
@@ -92,6 +92,7 @@ void setup()
   pinMode(relayPin, OUTPUT);
   pinMode(dir_input, INPUT_PULLUP);
   pinMode(9, OUTPUT);
+  pinMode(framePin, OUTPUT);
   // initialize timer1
   noInterrupts();           // disable all interrupts
   TCCR1A = 0;
@@ -137,12 +138,14 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
   {
     lcount = 0;
     digitalWrite(blankPin, 0);          // End blanking
+	digitalWrite(framePin, 0);          // Start of 60Hz frame
   }
 
   else if (lcount == 99)
   {
     throttle_calculate();
     sixty_Hz = 1;               // Clock tick
+	digitalWrite(framePin, 1);  // End of 60Hz frame
   }
 
   else if (lcount == 94)              // TIme 94, start the A/D
