@@ -59,20 +59,14 @@ byte direction_relay;
 byte pause;
 byte adc_high_res;
 
-union {
-  unsigned int ps_w;
-  byte ps_b[2];
-} pot_setting;
+unsigned int pot_setting;
 
 union {
   unsigned int rs_w;
   byte rs_b[2];
 } raw_speed;
 
-union {
-  int e_w;
-  byte e_b[2];
-} error;
+int error;
 
 byte inp;
 byte throttle_out;
@@ -178,10 +172,10 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
     }
     else if (a2d_running == 2)    // No, were we measuring pot setting?
     {
-      pot_setting.ps_w = ADC;     // Yes
+      pot_setting = ADC;     // Yes
       if (use_pot)
       {
-        inp = pot_setting.ps_w / 10;      // Maybe use it to control train
+        inp = pot_setting / 10;      // Maybe use it to control train
         if (inp > 2)
           inp -= 2;
         else
@@ -317,7 +311,7 @@ void loop()
 
     if (((ct & (FAST ? 0x1F : 0x7)) == 0) && !pause)          // One time in 16, about 4 Hz
     {
-      sprintf(inpah, "%d\t%d\t%d %c\t%d\t%d\n", inp, throttle_out, raw_speed.rs_w, (adc_high_res ? 'L' : 'H'), error, pot_setting.ps_w);
+      sprintf(inpah, "%d\t%d\t%d %c\t%d\t%d\n", inp, throttle_out, raw_speed.rs_w, (adc_high_res ? 'L' : 'H'), error, pot_setting);
       Serial.print(inpah);
     }
   }
@@ -339,14 +333,14 @@ void throttle_calculate(void)
     return;
   }
 
-  error.e_w = (inp * 64) - xby * 8  - raw_speed.rs_b[0] * 8;
+  error = (inp * 64) - xby * 8  - raw_speed.rs_b[0] * 8;
 
-  if (error.e_w < 0)
+  if (error < 0)
     throttle_out = inp;
-  else if  (inp + (error.e_w / 16) > 99)
+  else if  (inp + (error / 16) > 99)
     throttle_out = 99;
-  else if (inp + (error.e_w / 16) >= 0)
-    throttle_out = inp + (error.e_w / 16);
+  else if (inp + (error / 16) >= 0)
+    throttle_out = inp + (error / 16);
   else
     throttle_out = inp;
 
