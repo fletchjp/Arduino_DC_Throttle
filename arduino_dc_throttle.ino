@@ -128,47 +128,52 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
     digitalWrite(ledPin, 0);         // output off
 
   lcount++;
-  if (lcount >= 100)            // At 100%, end blanking, reset count ready for new cycle
+
+  switch(lcount)
   {
+   case 100:                            // At 100%, end blanking, reset count ready for new cycle
     lcount = 0;
     digitalWrite(blankPin, 0);          // End blanking
-	digitalWrite(framePin, 0);          // Start of 60Hz frame
-  }
-
-  else if (lcount == 99)
-  {
+    digitalWrite(framePin, 0);          // Start of 60Hz frame
+    break;
+    
+   case 99:   
     throttle_calculate();
     sixty_Hz = 1;               // Clock tick
-	digitalWrite(framePin, 1);  // End of 60Hz frame
-  }
+	  digitalWrite(framePin, 1);  // End of 60Hz frame
+    break;
 
-  else if (lcount == 94)              // TIme 94, start the A/D
-  {
+  case 94:              // Time 94, start the A/D  
     if ((inp != 0) && (adc_high_res == 0) && (raw_speed.rs_w < 200))
       adc_high_res = 0x80;
     else if (adc_high_res && (raw_speed.rs_w > 1000))
       adc_high_res = 0;
 
     ADMUX = 0x40 + adc_high_res;
-    ADCSRA = RUN_ADC;  //
+    ADCSRA = RUN_ADC;
     a2d_running = 1;                 // A/D measures speed starting at cycle 94
-  }
+    break;
 
-  else if ((lcount >= 90)) // && (inp != 0))
+  case 90:
+    if((inp != 0) && (inp <= 40))  // Only produce blanking pulse if back EMF required
+    {
     digitalWrite(blankPin, 1);        // Blanking begins at 90% and lasts for final 10 counts
+    }
+    break;
 
-  else if (lcount == 3)
-  {
+  case 3: 
+    ADMUX = 0x41; 
     ADCSRA = RUN_ADC;  //           // A/D measures pot input
     a2d_running = 2;
-  }
-
+    break;
+  
+}
   if (!(ADCSRA & 0x40) && a2d_running)    // A/D has just finished
   {
     if (a2d_running == 1)         // Were we measuring speed?
     {
       raw_speed.rs_w = ADC;       // Yes
-      ADMUX = 0x41;               // Next measurement is pot, always low resolution (5V scale)
+ //     ADMUX = 0x41;               // Next measurement is pot, always low resolution (5V scale)
     }
     else if (a2d_running == 2)    // No, were we measuring pot setting?
     {
@@ -181,7 +186,7 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
         else
           inp = 0;
       }
-      ADMUX = 0x40 + adc_high_res;  // Channel 0, track voltage maybe in high res mode
+ //     ADMUX = 0x40 + adc_high_res;  // Channel 0, track voltage maybe in high res mode
     }
     a2d_running = 0;              // A/D reading is complete and data stored
   }
@@ -195,13 +200,13 @@ void check_direction(void)
     return;
 
   direction_relay--;
-  if ((direction_relay & 0x7F) == FAST ? 30 : 6)
-  {
+//  if ((direction_relay & 0x7F) == FAST ? 30 : 6)
+ // {
     if (direction_relay & 0x80)
       digitalWrite(relayPin, 1);   // Set direction relay
     else
       digitalWrite(relayPin, 0);   // Clear direction relay
-  }
+//  }
 }
 
 void loop()
@@ -222,7 +227,7 @@ void loop()
     {
       l_inp = inp;
       z = Serial.read();
-      if ((z == '=') || (z == '+') && (l_inp < 99))                     // Increase speed
+      if ((z == '=') || (z == '+') && (l_inp <= 99))                     // Increase speed
       {
         l_inp++;
         num_in = THROTTLE_NULL - 2;
