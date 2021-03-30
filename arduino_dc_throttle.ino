@@ -60,6 +60,7 @@ byte pause;
 byte adc_high_res;
 
 unsigned int pot_setting;
+unsigned int volts_out;
 
 union {
   unsigned int rs_w;
@@ -70,6 +71,8 @@ int error;
 
 byte inp;
 byte throttle_out;
+byte track_occ;
+byte overload;
 
 byte use_pot;
 byte sixty_Hz;
@@ -126,6 +129,13 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
     digitalWrite(ledPin, 1);          // output on
   else
     digitalWrite(ledPin, 0);         // output off
+    
+  if (lcount == throttle_out)
+  {
+    ADMUX = 0x40; 
+    ADCSRA = RUN_ADC;  //           // A/D measures peak output voltage
+    a2d_running = 3;    
+  }
 
   lcount++;
 
@@ -161,32 +171,49 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
     }
     break;
 
-  case 3: 
+  case 60:
+    if(inp < 50)
+    {
     ADMUX = 0x41; 
     ADCSRA = RUN_ADC;  //           // A/D measures pot input
     a2d_running = 2;
+    }
     break;
-  
+
+  case 3: 
+    if(inp >=50)
+    {
+    ADMUX = 0x41; 
+    ADCSRA = RUN_ADC;  //           // A/D measures pot input
+    a2d_running = 2;
+    }
+    break;
 }
+
   if (!(ADCSRA & 0x40) && a2d_running)    // A/D has just finished
   {
-    if (a2d_running == 1)         // Were we measuring speed?
+    switch(a2d_running)
     {
-      raw_speed.rs_w = ADC;       // Yes
- //     ADMUX = 0x41;               // Next measurement is pot, always low resolution (5V scale)
-    }
-    else if (a2d_running == 2)    // No, were we measuring pot setting?
-    {
-      pot_setting = ADC;     // Yes
-      if (use_pot)
-      {
-        inp = pot_setting / 10;      // Maybe use it to control train
-        if (inp > 2)
-          inp -= 2;
-        else
-          inp = 0;
-      }
- //     ADMUX = 0x40 + adc_high_res;  // Channel 0, track voltage maybe in high res mode
+      case 1:         // We were measuring speed    
+        raw_speed.rs_w = ADC;
+        break;
+      
+      case 2:    // We were measuring pot setting
+        pot_setting = ADC;
+        if (use_pot)
+        {
+          inp = pot_setting / 10;      // Maybe use it to control train. inp will be in range 0 - 102
+          if (inp > 2)                // Adjust inp to range 0 - 100.
+            inp -= 2;
+          else
+            inp = 0;
+        }
+        break;
+
+      case 3:   // We were measuring peak output voltage
+        volts_out = ADC;
+        break;
+      
     }
     a2d_running = 0;              // A/D reading is complete and data stored
   }
@@ -211,10 +238,8 @@ void check_direction(void)
 
 void loop()
 {
-  byte aa = 0;
-  byte i, z;
+  byte z;  
   char inpah[200];
-  unsigned int speed;
   byte dir_sw = 0;
   byte ct;
   byte l_inp;
@@ -319,6 +344,31 @@ void loop()
       sprintf(inpah, "%d\t%d\t%d %c\t%d\t%d\n", inp, throttle_out, raw_speed.rs_w, (adc_high_res ? 'L' : 'H'), error, pot_setting);
       Serial.print(inpah);
     }
+  }
+}  // End of loop()
+
+void output_monitor(void)
+{
+  if (throttle_out == 0) 
+  {
+    if (ADC > 1000)
+    {
+      track_occ = 0;
+    }
+    else
+    {
+      track_occ = 1;
+    }    
+  }
+
+  if (ADC < (throttle_out - 3))
+  {
+    overload = 1;
+    inp = 0;
+  }
+  else
+  {
+    overload = 0;
   }
 }
 
