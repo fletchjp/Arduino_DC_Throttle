@@ -41,7 +41,7 @@ typedef unsigned char byte;
 
 #define FAST 0
 
-#define ledPin 13   // D10, B.5 Pin 16
+#define pwmPin 13   // D10, B.5 Pin 16
 #define blankPin 12 // D9, B.4 Pin 15
 #define relayPin 11 // D8 B.3
 #define dir_input 10 // D7 Pin 13 B.2
@@ -58,6 +58,7 @@ byte num_in;
 byte direction_relay;
 byte pause;
 byte adc_high_res;
+char inpah[200];
 
 unsigned int pot_setting;
 unsigned int volts_out;
@@ -78,13 +79,13 @@ byte use_pot;
 byte sixty_Hz;
 byte use_algorithm;
 
-byte the_packet[15];
+//byte the_packet[15];
 
-void throttle_calculate(void);
+//void throttle_calculate(void);
 
 void setup()
 {
-  pinMode(ledPin, OUTPUT);
+  pinMode(pwmPin, OUTPUT);
   pinMode(blankPin, OUTPUT);
   pinMode(relayPin, OUTPUT);
   pinMode(dir_input, INPUT_PULLUP);
@@ -116,6 +117,7 @@ void setup()
 
   interrupts();             // enable interrupts
   Serial.begin(115200);
+  Serial.print("Hit Enter key for instructions\n\n");
 }
 
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
@@ -126,9 +128,9 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
     digitalWrite(9, 1);         // Pin high if still running
 
   if ((lcount < throttle_out) && (!(direction_relay & 0x7F)))   // Note throttle_out = 0 will not cause output to go high at all
-    digitalWrite(ledPin, 1);          // output on
+    digitalWrite(pwmPin, 1);          // output on
   else
-    digitalWrite(ledPin, 0);         // output off
+    digitalWrite(pwmPin, 0);         // output off
     
   if (lcount == throttle_out)
   {
@@ -239,12 +241,12 @@ void check_direction(void)
 void loop()
 {
   byte z;  
-  char inpah[200];
+//  char inpah[200];
   byte dir_sw = 0;
   byte ct;
   byte l_inp;
 
-  Serial.print("Hit Enter key for instructions\n\n");
+//  Serial.print("Hit Enter key for instructions\n\n");
   while (1)
   {
 
@@ -351,7 +353,7 @@ void output_monitor(void)
 {
   if (throttle_out == 0) 
   {
-    if (ADC > 1000)
+    if (volts_out > 1000)
     {
       track_occ = 0;
     }
@@ -361,7 +363,7 @@ void output_monitor(void)
     }    
   }
 
-  if (ADC < (throttle_out - 3))
+  if (volts_out < (throttle_out - 3))
   {
     overload = 1;
     inp = 0;
