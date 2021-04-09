@@ -41,7 +41,7 @@ typedef unsigned char byte;
 
 #define FAST 0
 
-#define pwmPin 13   // D10, B.5 Pin 16
+#define ledPin 13   // D10, B.5 Pin 16
 #define blankPin 12 // D9, B.4 Pin 15
 #define relayPin 11 // D8 B.3
 #define dir_input 10 // D7 Pin 13 B.2
@@ -58,34 +58,36 @@ byte num_in;
 byte direction_relay;
 byte pause;
 byte adc_high_res;
-char inpah[200];
 
-unsigned int pot_setting;
-unsigned int volts_out;
+union {
+  unsigned int ps_w;
+  byte ps_b[2];
+} pot_setting;
 
 union {
   unsigned int rs_w;
   byte rs_b[2];
 } raw_speed;
 
-int error;
+union {
+  int e_w;
+  byte e_b[2];
+} error;
 
 byte inp;
 byte throttle_out;
-byte track_occ;
-byte overload;
 
 byte use_pot;
 byte sixty_Hz;
 byte use_algorithm;
 
-//byte the_packet[15];
+byte the_packet[15];
 
-//void throttle_calculate(void);
+void throttle_calculate(void);
 
 void setup()
 {
-  pinMode(pwmPin, OUTPUT);
+  pinMode(ledPin, OUTPUT);
   pinMode(blankPin, OUTPUT);
   pinMode(relayPin, OUTPUT);
   pinMode(dir_input, INPUT_PULLUP);
@@ -117,7 +119,6 @@ void setup()
 
   interrupts();             // enable interrupts
   Serial.begin(115200);
-  Serial.print("Hit Enter key for instructions\n\n");
 }
 
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
@@ -128,94 +129,65 @@ ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
     digitalWrite(9, 1);         // Pin high if still running
 
   if ((lcount < throttle_out) && (!(direction_relay & 0x7F)))   // Note throttle_out = 0 will not cause output to go high at all
-    digitalWrite(pwmPin, 1);          // output on
+    digitalWrite(ledPin, 1);          // output on
   else
-    digitalWrite(pwmPin, 0);         // output off
-    
-  if (lcount == throttle_out)
-  {
-    ADMUX = 0x40; 
-    ADCSRA = RUN_ADC;  //           // A/D measures peak output voltage
-    a2d_running = 3;    
-  }
+    digitalWrite(ledPin, 0);         // output off
 
   lcount++;
-
-  switch(lcount)
+  if (lcount >= 100)            // At 100%, end blanking, reset count ready for new cycle
   {
-   case 100:                            // At 100%, end blanking, reset count ready for new cycle
     lcount = 0;
     digitalWrite(blankPin, 0);          // End blanking
-    digitalWrite(framePin, 0);          // Start of 60Hz frame
-    break;
-    
-   case 99:   
+	digitalWrite(framePin, 0);          // Start of 60Hz frame
+  }
+
+  else if (lcount == 99)
+  {
     throttle_calculate();
     sixty_Hz = 1;               // Clock tick
-	  digitalWrite(framePin, 1);  // End of 60Hz frame
-    break;
+	digitalWrite(framePin, 1);  // End of 60Hz frame
+  }
 
-  case 94:              // Time 94, start the A/D  
+  else if (lcount == 94)              // TIme 94, start the A/D
+  {
     if ((inp != 0) && (adc_high_res == 0) && (raw_speed.rs_w < 200))
       adc_high_res = 0x80;
     else if (adc_high_res && (raw_speed.rs_w > 1000))
       adc_high_res = 0;
 
     ADMUX = 0x40 + adc_high_res;
-    ADCSRA = RUN_ADC;
+    ADCSRA = RUN_ADC;  //
     a2d_running = 1;                 // A/D measures speed starting at cycle 94
-    break;
+  }
 
-  case 90:
-    if((inp != 0) && (inp <= 40))  // Only produce blanking pulse if back EMF required
-    {
+  else if ((lcount >= 90)) // && (inp != 0))
     digitalWrite(blankPin, 1);        // Blanking begins at 90% and lasts for final 10 counts
-    }
-    break;
 
-  case 60:
-    if(inp < 50)
-    {
-    ADMUX = 0x41; 
+  else if (lcount == 3)
+  {
     ADCSRA = RUN_ADC;  //           // A/D measures pot input
     a2d_running = 2;
-    }
-    break;
-
-  case 3: 
-    if(inp >=50)
-    {
-    ADMUX = 0x41; 
-    ADCSRA = RUN_ADC;  //           // A/D measures pot input
-    a2d_running = 2;
-    }
-    break;
-}
+  }
 
   if (!(ADCSRA & 0x40) && a2d_running)    // A/D has just finished
   {
-    switch(a2d_running)
+    if (a2d_running == 1)         // Were we measuring speed?
     {
-      case 1:         // We were measuring speed    
-        raw_speed.rs_w = ADC;
-        break;
-      
-      case 2:    // We were measuring pot setting
-        pot_setting = ADC;
-        if (use_pot)
-        {
-          inp = pot_setting / 10;      // Maybe use it to control train. inp will be in range 0 - 102
-          if (inp > 2)                // Adjust inp to range 0 - 100.
-            inp -= 2;
-          else
-            inp = 0;
-        }
-        break;
-
-      case 3:   // We were measuring peak output voltage
-        volts_out = ADC;
-        break;
-      
+      raw_speed.rs_w = ADC;       // Yes
+      ADMUX = 0x41;               // Next measurement is pot, always low resolution (5V scale)
+    }
+    else if (a2d_running == 2)    // No, were we measuring pot setting?
+    {
+      pot_setting.ps_w = ADC;     // Yes
+      if (use_pot)
+      {
+        inp = pot_setting.ps_w / 10;      // Maybe use it to control train
+        if (inp > 2)
+          inp -= 2;
+        else
+          inp = 0;
+      }
+      ADMUX = 0x40 + adc_high_res;  // Channel 0, track voltage maybe in high res mode
     }
     a2d_running = 0;              // A/D reading is complete and data stored
   }
@@ -229,24 +201,26 @@ void check_direction(void)
     return;
 
   direction_relay--;
-//  if ((direction_relay & 0x7F) == FAST ? 30 : 6)
- // {
+  if ((direction_relay & 0x7F) == FAST ? 30 : 6)
+  {
     if (direction_relay & 0x80)
       digitalWrite(relayPin, 1);   // Set direction relay
     else
       digitalWrite(relayPin, 0);   // Clear direction relay
-//  }
+  }
 }
 
 void loop()
 {
-  byte z;  
-//  char inpah[200];
+  byte aa = 0;
+  byte i, z;
+  char inpah[200];
+  unsigned int speed;
   byte dir_sw = 0;
   byte ct;
   byte l_inp;
 
-//  Serial.print("Hit Enter key for instructions\n\n");
+  Serial.print("Hit Enter key for instructions\n\n");
   while (1)
   {
 
@@ -254,7 +228,7 @@ void loop()
     {
       l_inp = inp;
       z = Serial.read();
-      if ((z == '=') || (z == '+') && (l_inp <= 99))                     // Increase speed
+      if ((z == '=') || (z == '+') && (l_inp < 99))                     // Increase speed
       {
         l_inp++;
         num_in = THROTTLE_NULL - 2;
@@ -343,34 +317,9 @@ void loop()
 
     if (((ct & (FAST ? 0x1F : 0x7)) == 0) && !pause)          // One time in 16, about 4 Hz
     {
-      sprintf(inpah, "%d\t%d\t%d %c\t%d\t%d\n", inp, throttle_out, raw_speed.rs_w, (adc_high_res ? 'L' : 'H'), error, pot_setting);
+      sprintf(inpah, "%d\t%d\t%d %c\t%d\t%d\n", inp, throttle_out, raw_speed.rs_w, (adc_high_res ? 'L' : 'H'), error, pot_setting.ps_w);
       Serial.print(inpah);
     }
-  }
-}  // End of loop()
-
-void output_monitor(void)
-{
-  if (throttle_out == 0) 
-  {
-    if (volts_out > 1000)
-    {
-      track_occ = 0;
-    }
-    else
-    {
-      track_occ = 1;
-    }    
-  }
-
-  if (volts_out < (throttle_out - 3))
-  {
-    overload = 1;
-    inp = 0;
-  }
-  else
-  {
-    overload = 0;
   }
 }
 
@@ -390,14 +339,14 @@ void throttle_calculate(void)
     return;
   }
 
-  error = (inp * 64) - xby * 8  - raw_speed.rs_b[0] * 8;
+  error.e_w = (inp * 64) - xby * 8  - raw_speed.rs_b[0] * 8;
 
-  if (error < 0)
+  if (error.e_w < 0)
     throttle_out = inp;
-  else if  (inp + (error / 16) > 99)
+  else if  (inp + (error.e_w / 16) > 99)
     throttle_out = 99;
-  else if (inp + (error / 16) >= 0)
-    throttle_out = inp + (error / 16);
+  else if (inp + (error.e_w / 16) >= 0)
+    throttle_out = inp + (error.e_w / 16);
   else
     throttle_out = inp;
 
