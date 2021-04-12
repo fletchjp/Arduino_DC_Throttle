@@ -1,0 +1,6 @@
+{
+    "board": "arduino:avr:nano",
+    "programmer": "arduino:avrisp",
+    "sketch": "arduino_dc_throttle.ino",
+    "configuration": "cpu=atmega328"
+}
