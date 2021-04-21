@@ -1,3 +1,5 @@
+ <img align="right" src="arduino_merg_logo.png"  width="150" height="75">
+
 # Arduino_DC_Throttle
 
 This is the original code from John Purbrick for the DC Throttle.
